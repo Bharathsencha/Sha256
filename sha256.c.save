@@ -1,7 +1,7 @@
-#include "sha256.h"
+===#include "sha256.h"
 
 // rotate-right: rotates the bits of x to the right by n positions 
-static inline u32 rotr(u32 x, u32 n) {
+	static inline u32 rotr(u32 x, u32 n) {
     return (x >> n) | (x << (32 - n));
 }
 
@@ -35,8 +35,8 @@ static const u32 K[64] = {
 
 /* Process one 512-bit (64-byte) block of input.
  * This is the "heart" of SHA-256, where the compression function runs.
- * If we mess up here it's going to break everything.
- */
+ *If we messup here its gonna break  */
+
 static void sha256_transform(struct sha256_ctx *ctx, const u8 block[64]) {
     u32 W[64];      // message schedule array
     u32 a,b,c,d,e,f,g,h; // working variables
@@ -79,7 +79,7 @@ static void sha256_transform(struct sha256_ctx *ctx, const u8 block[64]) {
         a = t1 + t2;
     }
 
-    // Step 4: Add this block's hash to the cumulative state
+    //Step 4: Add this block’s hash to the cumulative state
     ctx->h[0] += a;
     ctx->h[1] += b;
     ctx->h[2] += c;
@@ -91,6 +91,7 @@ static void sha256_transform(struct sha256_ctx *ctx, const u8 block[64]) {
 }
 
 // Initialize SHA-256 context with standard initial hash values
+
 void sha256_init(struct sha256_ctx *ctx) {
     ctx->h[0] = 0x6a09e667u;
     ctx->h[1] = 0xbb67ae85u;
@@ -105,7 +106,8 @@ void sha256_init(struct sha256_ctx *ctx) {
     ctx->bitlen = 0;  // processed length = 0
 }
 
-// Byte copy (manual memcpy replacement)
+//Byte copy (manual memcpy replacement)
+
 static void memcopy_bytes(u8 *dst, const u8 *src, u32 n) {
     u32 i;
     for (i = 0; i < n; ++i) dst[i] = src[i];
@@ -136,13 +138,12 @@ void sha256_update(struct sha256_ctx *ctx, const u8 *data, u32 len) {
     }
 
     // Process direct full 64-byte blocks from input
-    // Fixed: Changed condition to prevent buffer overflow
-    while (i + 64 <= len) {
+    for ( ; i + 63 < len; i += 64) {
         sha256_transform(ctx, &data[i]);
-        i += 64;
     }
 
     // Copy any leftover bytes into buffer
+
     if (i < len) {
         u32 rem = len - i;
         memcopy_bytes(ctx->buffer, &data[i], rem);
@@ -157,53 +158,49 @@ void sha256_update(struct sha256_ctx *ctx, const u8 *data, u32 len) {
  * - Output final 32-byte hash
  */
 void sha256_final(struct sha256_ctx *ctx, u8 out_hash32[32]) {
+    u8 pad[64];
     u32 i;
+
+    // Step 1: Padding starts with 0x80 followed by zeros
+    for (i = 0; i < 64; ++i) pad[i] = 0;
+    pad[0] = 0x80;
+
+    // Step 2: Pad so message length ≡ 56 mod 64 (leaving 8 bytes for length)
+    if (ctx->buflen < 56) {
+        u32 padlen = 56 - ctx->buflen;
+        sha256_update(ctx, pad, padlen);
+    } else {
+        u32 padlen = 64 - ctx->buflen;
+        sha256_update(ctx, pad, padlen);
+        sha256_update(ctx, pad, 56); // extra block
+    }
+
+    // Step 3: Append 64-bit message length (big-endian)
+    u8 len64[8];
     u64 bits = ctx->bitlen;
+    len64[0] = (u8)((bits >> 56) & 0xFF);
+    len64[1] = (u8)((bits >> 48) & 0xFF);
+    len64[2] = (u8)((bits >> 40) & 0xFF);
+    len64[3] = (u8)((bits >> 32) & 0xFF);
+    len64[4] = (u8)((bits >> 24) & 0xFF);
+    len64[5] = (u8)((bits >> 16) & 0xFF);
+    len64[6] = (u8)((bits >> 8) & 0xFF);
+    len64[7] = (u8)(bits & 0xFF);
 
-    // Append padding: start with 0x80
-    ctx->buffer[ctx->buflen] = 0x80;
-    ctx->buflen++;
+    sha256_update(ctx, len64, 8);
 
-    // Handle case where padding doesn't fit in current block
-    if (ctx->buflen > 56) {
-        while (ctx->buflen < 64) {
-            ctx->buffer[ctx->buflen] = 0;
-            ctx->buflen++;
-        }
-        sha256_transform(ctx, ctx->buffer);
-        ctx->buflen = 0;
-    }
-
-    // Pad remaining space with zeros
-    while (ctx->buflen < 56) {
-        ctx->buffer[ctx->buflen] = 0;
-        ctx->buflen++;
-    }
-
-    // Append 64-bit length in big-endian
-    ctx->buffer[56] = (u8)(bits >> 56);
-    ctx->buffer[57] = (u8)(bits >> 48);
-    ctx->buffer[58] = (u8)(bits >> 40);
-    ctx->buffer[59] = (u8)(bits >> 32);
-    ctx->buffer[60] = (u8)(bits >> 24);
-    ctx->buffer[61] = (u8)(bits >> 16);
-    ctx->buffer[62] = (u8)(bits >> 8);
-    ctx->buffer[63] = (u8)bits;
-
-    // Process final block
-    sha256_transform(ctx, ctx->buffer);
-
-    // Output hash
+    // Step 4: Output final digest in big-endian
     for (i = 0; i < 8; ++i) {
         u32 val = ctx->h[i];
-        out_hash32[i*4 + 0] = (u8)(val >> 24);
-        out_hash32[i*4 + 1] = (u8)(val >> 16);
-        out_hash32[i*4 + 2] = (u8)(val >> 8);
-        out_hash32[i*4 + 3] = (u8)val;
+        out_hash32[i*4 + 0] = (u8)((val >> 24) & 0xFF);
+        out_hash32[i*4 + 1] = (u8)((val >> 16) & 0xFF);
+        out_hash32[i*4 + 2] = (u8)((val >> 8) & 0xFF);
+        out_hash32[i*4 + 3] = (u8)(val & 0xFF);
     }
 }
 
 // Convert binary digest into human-readable hex string
+
 void sha256_to_hex(const u8 hash32[32], char hex_out[65]) {
     static const char hexchars[] = "0123456789abcdef";
     u32 i;
